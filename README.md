@@ -34,8 +34,8 @@ Claude Code에서 논문 파일(HWP·PDF·텍스트)과 함께:
 
 | 환경변수 | 용도 | 발급 |
 |----------|------|------|
-| `KCI_API_KEY` | KCI 제목검색(articleSearch) — 국문 검증의 유일한 KCI 제목검색 경로. 없으면 RISS 주력 | https://open.kci.go.kr 무료 (IP 등록 방식, 막힐 수 있음) |
-| `KCI_DATA_GO_KR_KEY` | 공공데이터포털 KCI **보조** — 제목검색 불가(artiId 조회만), 서지·참고문헌 보강용 | https://data.go.kr KCI OpenApi 활용신청(자동승인) |
+| `KCI_API_KEY` | KCI 제목검색(articleSearch) — 국문 학술지논문 서지검증 주력. 한글은 UTF-8 | https://open.kci.go.kr 무료 |
+| `KCI_DATA_GO_KR_KEY` | 공공데이터포털 KCI **보조** — 제목검색 불가(article-id 조회만), 참고문헌(D215) 확장용 | https://data.go.kr KCI OpenApi 활용신청(자동승인) |
 | `LAW_OC` | 법제처 직접 호출 폴백 — 평소엔 프록시라 불필요 | https://open.law.go.kr 무료 |
 | `OPENALEX_MAILTO` | OpenAlex polite pool — 본인 이메일 | 발급 불필요 |
 

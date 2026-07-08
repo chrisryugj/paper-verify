@@ -1,7 +1,7 @@
 # 학술 문헌 검증 레시피
 
 라우팅 순서 — **DOI가 있으면 무조건 CrossRef 단건 조회부터** (가장 확실).
-없으면: 영문 → CrossRef 검색 → OpenAlex → Semantic Scholar / **국문 → RISS(주력)** → KCI(제목검색 키 있을 때만).
+없으면: 영문 → CrossRef 검색 → OpenAlex → Semantic Scholar / **국문 → KCI 제목검색(학술지논문)** → RISS(학위논문·미발견 보강).
 ❌(환각) 판정은 최소 2개 소스 미발견 + 검색어 변형(제목 일부·저자명·영문 제목) 시도 후.
 
 공통 원칙 (실측):
@@ -48,24 +48,38 @@ curl -sL --get "https://api.semanticscholar.org/graph/v1/paper/search" \
 
 ## KCI — 국내 학술지
 
-국문 서지검증에서 **제목 검색이 되는 KCI 경로는 `open.kci.go.kr` 뿐**이다. 발급되면 이걸 쓰고, 없으면 RISS로 간다. 공공데이터포털(`apis.data.go.kr`) 우회는 **제목 검색이 안 되므로 실존검증에 못 쓴다** (아래 실측).
+두 경로를 **article-id로 연결**해서 쓴다: **(a) open.kci.go.kr** 로 제목검색→서지대조(주력), 필요하면 얻은 `article-id`로 **(b) 공공데이터포털** 에서 참고문헌까지 확장.
 
-### (a) open.kci.go.kr — 제목검색 O, 키 필요
+### (a) open.kci.go.kr articleSearch — 제목검색 O (국문 주력, 실측 2026-07-08)
 ```bash
-curl -sL --get "https://open.kci.go.kr/po/openapi/openApiSearch.kci" \
+# ⚠️ 한글은 UTF-8이어야 함. mac/linux(UTF-8 로케일)는 --data-urlencode로 바로:
+curl -sL --ssl-no-revoke --get "https://open.kci.go.kr/po/openapi/openApiSearch.kci" \
   --data-urlencode "apiCode=articleSearch" \
   --data-urlencode "key=$KCI_API_KEY" \
-  --data-urlencode "title={논문제목}"
-# 응답 XML: journalInfo/article-title/author-group/pub-year 대조
+  --data-urlencode "title={논문제목}" \
+  --data-urlencode "displayCount=10" -o kci.xml
+# Windows Git bash 등 CP949 콘솔에선 한글 리터럴이 깨짐 → title을 UTF-8 percent-encoding으로:
+#   지방재정 → title=%EC%A7%80%EB%B0%A9%EC%9E%AC%EC%A0%95  (-G --data 로 raw 전달)
 ```
-- `$KCI_API_KEY` 미설정이면 건너뛰고 리포트에 "KCI 미조회(키 없음)" 명시 → RISS로.
-  키 발급은 https://open.kci.go.kr (IP 등록 방식이라 막히는 경우 있음)
-- 파라미터: `title`(제목), `author`(저자), `journal`(학술지명) 조합 가능
+- 응답 구조(실측): `<record>` 반복. 각 record 안에서 대조 —
+  - `journalInfo/journal-name`·`publisher-name`·`pub-year`·`volume`·`issue`
+  - `articleInfo` `@article-id`(예 `ART002912911`), `title-group/article-title`(lang=original|foreign|english CDATA), `author-group/author`(@english=로마자, 텍스트는 "이름(소속)"), `abstract`, `fpage`/`lpage`, `doi`, `citation-count`(@kci/@wos), `url`
+- 판정: `<total>`은 fuzzy 매칭 총건수 — 건수로 단정 말고 record의 `article-title`을 인용 표기와 직접 대조. 저자·연도·권호까지 맞으면 ✅.
+- 파라미터: `title`(제목), `author`(저자), `journal`(학술지명) 조합 가능. `$KCI_API_KEY` 없으면 RISS로 폴백하고 "KCI 미조회(키 없음)" 명시.
+- 키 발급: https://open.kci.go.kr (IP 등록 방식). 키는 `.env.local`의 `KCI_API_KEY`.
 
-### (b) 공공데이터포털 KCI — 제목검색 X (실측 2026-07-08)
-`apis.data.go.kr/B552540/KCIOpenApi/*` 4종(artiInfo/sereInfo/doiInfo/insiInfo)은 전부 **벌크다운로드/ID조회형**이라 제목·저자 검색 진입점이 없다. 서지정보는 `doiInfo/openApiD214List`에 있으나(KORTITLE/ENGTITLE/ENGABS/SPAGE/REFCNT) **`artiId`로만 조회**되고 `title` 파라미터는 무시하고 전체 220만건을 덤프한다 → **제목만 있는 인용의 실존검증엔 무용**. artiId를 이미 아는 경우의 서지·참고문헌 보강용으로만.
-- 호출 조건(실측): `serviceKey` 오타 주의(base64라 `I`/`l` 혼동 치명), **브라우저 User-Agent 필수**(curl 기본 UA는 KCI 웹방화벽이 400 차단), 필수 파라미터 `pageNo`·`recordCnt`. 키는 `.env.local`의 `KCI_DATA_GO_KR_KEY`.
-- 참고문헌(D215)·서지(D214) 조회 레시피와 프로브는 `scripts/kci-probe.sh` 참조.
+### (b) 공공데이터포털 KCI — 제목검색 X, article-id 조회 전용 (실측 2026-07-08)
+`apis.data.go.kr/B552540/KCIOpenApi/*`는 **벌크/ID조회형**이라 제목검색이 안 된다(`title` 파라미터 무시, 전체 220만건 덤프). **(a)에서 얻은 `article-id`로만** 서지·참고문헌 확장에 쓴다.
+```bash
+# 참고문헌 목록 (article-id 필요) — REFCNT>0인 논문의 인용 검증에 유용
+curl -sS --ssl-no-revoke -A "Mozilla/5.0" -G \
+  "$KCI_DATA_GO_KR_BASE/doiInfo/openApiD215List" \
+  --data-urlencode "ServiceKey=$KCI_DATA_GO_KR_KEY" \
+  --data-urlencode "pageNo=1" --data-urlencode "recordCnt=50" \
+  --data-urlencode "artiId={article-id}"
+```
+- 호출 조건(실측): **브라우저 User-Agent 필수**(curl 기본 UA는 KCI 웹방화벽 400 차단), 필수 `pageNo`·`recordCnt`, `serviceKey` base64 `I`/`l` 혼동 주의. 키는 `KCI_DATA_GO_KR_KEY`.
+- 유효 오퍼레이션: `doiInfo/D214`=서지(KORTITLE/ENGTITLE/ENGABS/SPAGE/REFCNT), `D215`=참고문헌, `D213`=권호. 프로브: `scripts/kci-probe.sh`.
 
 ## RISS — 학위논문·국내문헌 (키 불필요, HTML 파싱)
 
