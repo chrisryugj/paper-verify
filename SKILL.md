@@ -43,7 +43,7 @@ description: >
 | 유형 | 라우팅 | 상세 |
 |------|--------|------|
 | 법령·판례 | k-skill 프록시 (키 불필요) → 법제처 직접(OC) 폴백 | [legal.md](references/legal.md) |
-| 학술 문헌 | DOI→CrossRef 단건 / 없으면 CrossRef→OpenAlex→S2, 국문은 KCI→RISS | [scholarly.md](references/scholarly.md) |
+| 학술 문헌 | DOI→CrossRef 단건 / 없으면 CrossRef→OpenAlex→S2, 국문은 RISS(주력)→KCI(키 있을 때) | [scholarly.md](references/scholarly.md) |
 | 웹/보도자료 | WebFetch → insane-search 스킬 → 죽은 링크는 Wayback CDX | insane-search 위임 |
 | 통계 수치 | KOSIS 계열 인용이면 korean-stats-mcp 연결 시 대조 | 선택 |
 

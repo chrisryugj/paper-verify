@@ -1,7 +1,7 @@
 # 학술 문헌 검증 레시피
 
 라우팅 순서 — **DOI가 있으면 무조건 CrossRef 단건 조회부터** (가장 확실).
-없으면: 영문 → CrossRef 검색 → OpenAlex → Semantic Scholar / 국문 → KCI → RISS.
+없으면: 영문 → CrossRef 검색 → OpenAlex → Semantic Scholar / **국문 → RISS(주력)** → KCI(제목검색 키 있을 때만).
 ❌(환각) 판정은 최소 2개 소스 미발견 + 검색어 변형(제목 일부·저자명·영문 제목) 시도 후.
 
 공통 원칙 (실측):
@@ -46,8 +46,11 @@ curl -sL --get "https://api.semanticscholar.org/graph/v1/paper/search" \
 
 - 429 응답이면 `sleep 3` 후 1회 재시도, 계속 429면 이 소스는 건너뛰고 다른 소스로 판정
 
-## KCI — 국내 학술지 (키 필요)
+## KCI — 국내 학술지
 
+국문 서지검증에서 **제목 검색이 되는 KCI 경로는 `open.kci.go.kr` 뿐**이다. 발급되면 이걸 쓰고, 없으면 RISS로 간다. 공공데이터포털(`apis.data.go.kr`) 우회는 **제목 검색이 안 되므로 실존검증에 못 쓴다** (아래 실측).
+
+### (a) open.kci.go.kr — 제목검색 O, 키 필요
 ```bash
 curl -sL --get "https://open.kci.go.kr/po/openapi/openApiSearch.kci" \
   --data-urlencode "apiCode=articleSearch" \
@@ -55,10 +58,14 @@ curl -sL --get "https://open.kci.go.kr/po/openapi/openApiSearch.kci" \
   --data-urlencode "title={논문제목}"
 # 응답 XML: journalInfo/article-title/author-group/pub-year 대조
 ```
-
-- `$KCI_API_KEY` 미설정이면 이 소스는 건너뛰고 리포트에 "KCI 미조회(키 없음)" 명시.
-  키는 https://open.kci.go.kr 무료 발급 → `.zshrc` 등에 `export KCI_API_KEY=...`
+- `$KCI_API_KEY` 미설정이면 건너뛰고 리포트에 "KCI 미조회(키 없음)" 명시 → RISS로.
+  키 발급은 https://open.kci.go.kr (IP 등록 방식이라 막히는 경우 있음)
 - 파라미터: `title`(제목), `author`(저자), `journal`(학술지명) 조합 가능
+
+### (b) 공공데이터포털 KCI — 제목검색 X (실측 2026-07-08)
+`apis.data.go.kr/B552540/KCIOpenApi/*` 4종(artiInfo/sereInfo/doiInfo/insiInfo)은 전부 **벌크다운로드/ID조회형**이라 제목·저자 검색 진입점이 없다. 서지정보는 `doiInfo/openApiD214List`에 있으나(KORTITLE/ENGTITLE/ENGABS/SPAGE/REFCNT) **`artiId`로만 조회**되고 `title` 파라미터는 무시하고 전체 220만건을 덤프한다 → **제목만 있는 인용의 실존검증엔 무용**. artiId를 이미 아는 경우의 서지·참고문헌 보강용으로만.
+- 호출 조건(실측): `serviceKey` 오타 주의(base64라 `I`/`l` 혼동 치명), **브라우저 User-Agent 필수**(curl 기본 UA는 KCI 웹방화벽이 400 차단), 필수 파라미터 `pageNo`·`recordCnt`. 키는 `.env.local`의 `KCI_DATA_GO_KR_KEY`.
+- 참고문헌(D215)·서지(D214) 조회 레시피와 프로브는 `scripts/kci-probe.sh` 참조.
 
 ## RISS — 학위논문·국내문헌 (키 불필요, HTML 파싱)
 

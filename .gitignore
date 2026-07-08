@@ -1,0 +1,8 @@
+# secrets — 절대 커밋 금지
+.env
+.env.local
+*.key
+
+# scratch
+/tmp/
+*.tmp
